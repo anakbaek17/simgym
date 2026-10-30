@@ -1,0 +1,22 @@
+FIT HUB GYM ACCESS - UPDATE: BERANDA PUBLIK (VISITOR), TARGET AWAL->TARGET, VIDEO PROGRAM LATIHAN
+
+CARA PASANG
+1. Tutup server (Ctrl+C), backup app.py dan database.db lama.
+2. Salin app.py dari ZIP ini ke folder project (timpa). Jangan hapus database.db.
+3. Jalankan: python app.py  -> kolom baru dibuat otomatis (data lama aman).
+   Akun demo VIS001 dari versi sebelumnya dihapus otomatis (visitor tidak butuh akun lagi).
+
+VISITOR = BERANDA PUBLIK, TANPA LOGIN
+- Buka http://127.0.0.1:5000/ -> langsung tampil halaman pemasaran gym (hero foto gym, keunggulan,
+  paket, trainer, fasilitas, cara bergabung). Tidak ada akun/password visitor.
+- Tombol "Masuk" / "Sudah member? Masuk" -> halaman /login (member, trainer, admin, owner).
+- Di halaman login ada link "Kembali ke Beranda". Setelah logout, kembali ke beranda publik.
+- Tombol "Daftar Member" / "Ambil Paket Ini" membuka WhatsApp admin dengan pesan otomatis.
+  Nomor diambil dari data telepon akun admin pertama -> ganti dengan nomor asli gym.
+- Halaman publik hanya menampilkan info umum (paket, nama trainer, alat). Tidak ada data
+  pribadi/pembayaran, dan tidak ada aksi ubah data.
+
+TARGET LATIHAN (TRAINER) - berat badan awal -> target, body fat awal -> target; tersimpan ke database.
+  Member melihatnya di Progres & Perkembangan.
+VIDEO PROGRAM LATIHAN - trainer mengisi link video (YouTube/.mp4); tampil sebagai pemutar di
+  dashboard member > Program Latihan.
