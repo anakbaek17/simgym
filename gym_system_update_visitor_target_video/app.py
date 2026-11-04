@@ -7,6 +7,9 @@ from datetime import datetime
 import html
 import re
 from urllib.parse import urlparse, parse_qs, quote
+import sys
+import time
+from werkzeug.security import generate_password_hash, check_password_hash
 
 app = Flask(__name__)
 # Kunci sesi lokal yang stabil, tetapi tidak ditulis langsung di kode sumber.
@@ -18,6 +21,95 @@ app.secret_key = os.environ.get('GYM_SECRET_KEY') or SECRET_FILE.read_text(encod
 DB_PATH = str(BASE_DIR / 'database.db')
 PROOF_DIR = BASE_DIR / 'payment_proofs'  # Bukti pembayaran bersifat privat, bukan di /static.
 app.config['MAX_CONTENT_LENGTH'] = 6 * 1024 * 1024
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+
+# ---- Keamanan login: hash password + pembatasan percobaan login ----
+MIN_PASSWORD_LEN = 8
+LOGIN_MAX_FAILS = 5          # maksimal salah per kombinasi IP + akun
+LOGIN_IP_MAX_FAILS = 20      # maksimal salah per IP (semua akun)
+LOGIN_WINDOW_SECONDS = 300   # jendela hitung & lama blokir (5 menit)
+_DUMMY_HASH = generate_password_hash('dummy-password-untuk-menyamakan-waktu')
+
+
+def is_password_hashed(value):
+    return isinstance(value, str) and value.startswith(('scrypt:', 'pbkdf2:'))
+
+
+def _attempts_conn():
+    """Koneksi ke tabel percobaan gagal (disimpan di database.db agar tidak hilang saat restart)."""
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute('CREATE TABLE IF NOT EXISTS login_attempts (key TEXT NOT NULL, ts REAL NOT NULL)')
+    conn.execute('CREATE INDEX IF NOT EXISTS idx_login_attempts_key ON login_attempts(key, ts)')
+    return conn
+
+
+def _keys(ip, login_input):
+    return ((f"{ip}|{login_input}", LOGIN_MAX_FAILS), (f"{ip}", LOGIN_IP_MAX_FAILS))
+
+
+def login_lock_seconds(ip, login_input):
+    """Sisa detik blokir (0 jika boleh mencoba)."""
+    now = time.time()
+    since = now - LOGIN_WINDOW_SECONDS
+    locks = []
+    conn = _attempts_conn()
+    try:
+        conn.execute('DELETE FROM login_attempts WHERE ts < ?', (since,))
+        conn.commit()
+        for key, limit in _keys(ip, login_input):
+            rows = conn.execute('SELECT ts FROM login_attempts WHERE key = ? AND ts >= ? ORDER BY ts',
+                                (key, since)).fetchall()
+            if len(rows) >= limit:
+                locks.append(int(LOGIN_WINDOW_SECONDS - (now - rows[0][0])) + 1)
+    finally:
+        conn.close()
+    return max(locks) if locks else 0
+
+
+def record_login_fail(ip, login_input):
+    now = time.time()
+    conn = _attempts_conn()
+    try:
+        conn.executemany('INSERT INTO login_attempts (key, ts) VALUES (?, ?)',
+                         [(key, now) for key, _ in _keys(ip, login_input)])
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def clear_login_fails(ip, login_input):
+    conn = _attempts_conn()
+    try:
+        conn.execute('DELETE FROM login_attempts WHERE key = ?', (f"{ip}|{login_input}",))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+
+# Foto cadangan (gym gelap) dipakai otomatis jika file lokal belum ada di static/images.
+FALLBACK_IMAGES = {
+    'hero': 'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?auto=format&fit=crop&w=1200&q=80',
+    'login': 'https://images.unsplash.com/photo-1517836357463-d25dfeac3438?auto=format&fit=crop&w=1920&q=80',
+}
+
+
+def site_image(filenames, fallback_key):
+    """Pakai gambar lokal pertama yang ada di static/images; jika tidak ada, pakai foto cadangan."""
+    for name in filenames:
+        if (Path(app.static_folder) / 'images' / name).is_file():
+            return url_for('static', filename=f'images/{name}')
+    return FALLBACK_IMAGES[fallback_key]
+
+
+@app.context_processor
+def inject_site_images():
+    return {
+        # Taruh foto gym sendiri di static/images/hero.jpg (atau login-bg.png) agar otomatis dipakai.
+        'hero_img': site_image(['hero.jpg', 'hero.png', 'hero.webp', 'login-bg.png'], 'hero'),
+        'login_bg_img': site_image(['login-bg.png'], 'login'),
+    }
 
 
 def csrf_valid():
@@ -259,12 +351,18 @@ def init_db():
 
     cursor.execute("SELECT COUNT(*) FROM users")
     if cursor.fetchone()[0] == 0:
-        cursor.executemany("INSERT INTO users (unique_code, name, email, password, role, phone) VALUES (?, ?, ?, ?, ?, ?)", [
-            ('OWN001', 'Budi Santoso', 'budi@gym.com', 'password123', 'owner', '081234567800'),
-            ('ADM001', 'Siti Aminah', 'siti@gym.com', 'password123', 'admin', '081234567801'),
-            ('TRN001', 'Rian Fitness', 'rian@gym.com', 'password123', 'trainer', '081234567802'),
-            ('MEM001', 'Andi Pratama', 'andi@gym.com', 'password123', 'member', '081234567803')
-        ])
+        seed_users = [
+            ('OWN001', 'Budi Santoso', 'budi@gym.com', 'owner', '081234567800'),
+            ('ADM001', 'Siti Aminah', 'siti@gym.com', 'admin', '081234567801'),
+            ('TRN001', 'Rian Fitness', 'rian@gym.com', 'trainer', '081234567802'),
+            ('MEM001', 'Andi Pratama', 'andi@gym.com', 'member', '081234567803'),
+        ]
+        first_run_passwords = {}
+        for code, uname, email, role, phone in seed_users:
+            plain = secrets.token_urlsafe(9)  # password acak, unik per akun
+            first_run_passwords[code] = plain
+            cursor.execute("INSERT INTO users (unique_code, name, email, password, role, phone) VALUES (?, ?, ?, ?, ?, ?)",
+                           (code, uname, email, generate_password_hash(plain), role, phone))
         cursor.executemany("INSERT INTO membership_packages (package_name, duration_months, price, status) VALUES (?, ?, ?, ?)", [
             ('Paket Biru', 1, 250000, 'Aktif'),
             ('Standard', 3, 400000, 'Aktif'),
@@ -276,10 +374,29 @@ def init_db():
         cursor.execute("INSERT INTO equipment (equipment_name, category, status) VALUES ('Treadmill Pro X', 'Cardio', 'Tersedia'), ('Olympic Barbell', 'Beban', 'Tersedia')")
         cursor.execute("INSERT INTO payments (member_id, package_id, amount, payment_date, status) VALUES (4, 3, 600000, '2026-10-20 20:00:00', 'Lunas')")
         conn.commit()
+        print("\n" + "=" * 60)
+        print("AKUN AWAL DIBUAT. Catat password ini, hanya tampil sekali:")
+        for code, plain in first_run_passwords.items():
+            print(f"  {code:<8} {plain}")
+        print("=" * 60 + "\n")
 
-    # Visitor tidak memakai akun/login lagi (beranda publik). Bersihkan akun demo VIS001 dari versi sebelumnya.
-    cursor.execute("DELETE FROM users WHERE role = 'visitor' AND unique_code = 'VIS001' AND email = 'visitor@gym.com'")
-    conn.commit()
+    # Migrasi: ubah password lama (teks polos) menjadi hash. Aman dijalankan berulang.
+    migrated = 0
+    for uid, pw in cursor.execute("SELECT id, password FROM users").fetchall():
+        if not is_password_hashed(pw):
+            cursor.execute("UPDATE users SET password = ? WHERE id = ?", (generate_password_hash(pw), uid))
+            migrated += 1
+    if migrated:
+        conn.commit()
+        print(f"[KEAMANAN] {migrated} password lama berhasil di-hash.")
+
+    # Peringatan jika masih ada akun yang memakai password bawaan lama.
+    weak = [r[0] for r in cursor.execute("SELECT unique_code, password FROM users").fetchall()
+            if check_password_hash(r[1], 'password123')]
+    if weak:
+        print("[PERINGATAN] Akun ini masih memakai password lama 'password123': " + ", ".join(weak))
+        print("             Ganti dengan: python app.py reset-password <KODE>")
+
     conn.close()
 
 BASE_TEMPLATE = '''
@@ -420,27 +537,28 @@ BASE_TEMPLATE = '''
         </div>
         <ul class="sidebar-menu">
             {% if role == 'member' %}
-                <li><a href="/?menu=dashboard" class="{{ 'active' if menu=='dashboard' }}">📊 Dashboard Utama</a></li>
-                <li><a href="/?menu=packages" class="{{ 'active' if menu=='packages' }}">📦 Paket Membership</a></li>
-                <li><a href="/?menu=checkin" class="{{ 'active' if menu=='checkin' }}">📷 Check-in QR Code</a></li>
-                <li><a href="/?menu=workouts" class="{{ 'active' if menu=='workouts' }}">🏋️ Program Latihan</a></li>
-                <li><a href="/?menu=progress" class="{{ 'active' if menu=='progress' }}">📈 Progres & Perkembangan</a></li>
-                <li><a href="/?menu=profile" class="{{ 'active' if menu=='profile' }}">💳 Pembayaran & Profil</a></li>
+                <li><a href="/dashboard?menu=dashboard" class="{{ 'active' if menu=='dashboard' }}">📊 Dashboard Utama</a></li>
+                <li><a href="/dashboard?menu=packages" class="{{ 'active' if menu=='packages' }}">📦 Paket Membership</a></li>
+                <li><a href="/dashboard?menu=checkin" class="{{ 'active' if menu=='checkin' }}">📷 Check-in QR Code</a></li>
+                <li><a href="/dashboard?menu=workouts" class="{{ 'active' if menu=='workouts' }}">🏋️ Program Latihan</a></li>
+                <li><a href="/dashboard?menu=progress" class="{{ 'active' if menu=='progress' }}">📈 Progres & Perkembangan</a></li>
+                <li><a href="/dashboard?menu=profile" class="{{ 'active' if menu=='profile' }}">💳 Pembayaran & Profil</a></li>
             {% elif role == 'trainer' %}
-                <li><a href="/?menu=dashboard" class="{{ 'active' if menu=='dashboard' }}">📊 Dashboard Trainer</a></li>
-                <li><a href="/?menu=assign_workout" class="{{ 'active' if menu=='assign_workout' }}">📋 Program Latihan Member</a></li>
-                <li><a href="/?menu=set_target" class="{{ 'active' if menu=='set_target' }}">🎯 Target Latihan Member</a></li>
-                <li><a href="/?menu=monitor_progress" class="{{ 'active' if menu=='monitor_progress' }}">📅 Progres & Jadwal Member</a></li>
+                <li><a href="/dashboard?menu=dashboard" class="{{ 'active' if menu=='dashboard' }}">📊 Dashboard Trainer</a></li>
+                <li><a href="/dashboard?menu=assign_workout" class="{{ 'active' if menu=='assign_workout' }}">📋 Program Latihan Member</a></li>
+                <li><a href="/dashboard?menu=set_target" class="{{ 'active' if menu=='set_target' }}">🎯 Target Latihan Member</a></li>
+                <li><a href="/dashboard?menu=monitor_progress" class="{{ 'active' if menu=='monitor_progress' }}">📅 Progres & Jadwal Member</a></li>
             {% elif role == 'admin' %}
-                <li><a href="/?menu=dashboard" class="{{ 'active' if menu=='dashboard' }}">📊 Dashboard Admin</a></li>
-                <li><a href="/?menu=manage_members" class="{{ 'active' if menu=='manage_members' }}">👥 Kelola Member</a></li>
-                <li><a href="/?menu=manage_packages" class="{{ 'active' if menu=='manage_packages' }}">📦 Kelola Paket Membership</a></li>
-                <li><a href="/?menu=manage_equipment" class="{{ 'active' if menu=='manage_equipment' }}">⚙️ Data Alat Gym</a></li>
-                <li><a href="/?menu=manage_payments" class="{{ 'active' if menu=='manage_payments' }}">💰 Kelola Pembayaran</a></li>
-                <li><a href="/?menu=manage_trainers" class="{{ 'active' if menu=='manage_trainers' }}">🏋️ Kelola Trainer</a></li>
+                <li><a href="/dashboard?menu=dashboard" class="{{ 'active' if menu=='dashboard' }}">📊 Dashboard Admin</a></li>
+                <li><a href="/dashboard?menu=manage_members" class="{{ 'active' if menu=='manage_members' }}">👥 Kelola Member</a></li>
+                <li><a href="/dashboard?menu=manage_packages" class="{{ 'active' if menu=='manage_packages' }}">📦 Kelola Paket Membership</a></li>
+                <li><a href="/dashboard?menu=manage_equipment" class="{{ 'active' if menu=='manage_equipment' }}">⚙️ Data Alat Gym</a></li>
+                <li><a href="/dashboard?menu=manage_payments" class="{{ 'active' if menu=='manage_payments' }}">💰 Kelola Pembayaran</a></li>
+                <li><a href="/dashboard?menu=manage_trainers" class="{{ 'active' if menu=='manage_trainers' }}">🏋️ Kelola Trainer</a></li>
             {% elif role == 'owner' %}
-                <li><a href="/?menu=dashboard" class="{{ 'active' if menu=='dashboard' }}">📊 Dashboard Eksekutif</a></li>
+                <li><a href="/dashboard?menu=dashboard" class="{{ 'active' if menu=='dashboard' }}">📊 Dashboard Eksekutif</a></li>
             {% endif %}
+            <li><a href="/dashboard?menu=account" class="{{ 'active' if menu=='account' }}">🔐 Akun Saya</a></li>
         </ul>
         <div class="sidebar-footer">
             <a href="/logout" class="btn-logout">Keluar Sistem</a>
@@ -465,9 +583,10 @@ LOGIN_HTML = '''
 <!DOCTYPE html>
 <html lang="id">
 <head><meta charset="UTF-8"><title>Login - FIT HUB GYM ACCESS</title></head>
-<body style="background: linear-gradient(rgba(11, 15, 25, 0.75), rgba(11, 15, 25, 0.85)), url('{{ url_for("static", filename="images/login-bg.png") }}'); background-size: cover; background-position: center; color: #f8fafc; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; font-family: 'Inter', sans-serif;">
+<body style="background: linear-gradient(rgba(11, 15, 25, 0.75), rgba(11, 15, 25, 0.85)), url('{{ login_bg_img }}'); background-size: cover; background-position: center; color: #f8fafc; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; font-family: 'Inter', sans-serif;">
     <div style="background: rgba(19, 27, 46, 0.85); backdrop-filter: blur(12px); padding: 45px; border-radius: 20px; box-shadow: 0 20px 40px rgba(0,0,0,0.6); width: 100%; max-width: 420px; border: 1px solid rgba(255, 255, 255, 0.1); border-top: 4px solid #f5b000;">
         <h2 style="text-align: center; margin-bottom: 25px; color: #f8fafc; font-weight: 800; font-size: 24px; letter-spacing: 0.5px;">FIT HUB GYM <span style="color: #f5b000;">ACCESS</span></h2>
+        {% if error %}<div style="background: rgba(239,68,68,.15); border: 1px solid rgba(239,68,68,.45); color: #fca5a5; padding: 10px 14px; border-radius: 8px; font-size: 13px; margin-bottom: 18px; text-align: center;">{{ error }}</div>{% endif %}
         <form method="POST">
             <div style="margin-bottom: 20px;">
                 <label style="display: block; margin-bottom: 8px; font-size: 13px; color: #94a3b8; font-weight: 600;">Kode Unik / Nama / Email</label>
@@ -479,14 +598,6 @@ LOGIN_HTML = '''
             </div>
             <button type="submit" style="width: 100%; padding: 14px; background: #f5b000; border: none; border-radius: 8px; color: #0b0f19; font-size: 15px; font-weight: 800; cursor: pointer; box-shadow: 0 4px 15px rgba(245,176,0,0.3);">MASUK SISTEM</button>
         </form>
-        <div style="font-size: 12px; color: #94a3b8; text-align: center; margin-top: 25px; line-height: 1.6;">
-            <b>Akun Demo Default:</b><br>
-            Member: <b>Andi Pratama</b> (MEM001)<br>
-            Trainer: <b>Rian Fitness</b> (TRN001)<br>
-            Admin: <b>Siti Aminah</b> (ADM001) | Owner: <b>Budi Santoso</b> (OWN001)<br>
-            Password semua: <code>password123</code>
-        </div>
-        <div style="text-align:center; margin-top:18px;"><a href="/" style="color:#f5b000; font-size:13px; font-weight:700; text-decoration:none;">← Kembali ke Beranda</a></div>
     </div>
 </body>
 </html>
@@ -525,7 +636,7 @@ VISITOR_LANDING_HTML = '''<!DOCTYPE html>
 
   /* HERO */
   .hero { position:relative; min-height:100vh; display:flex; align-items:center; padding:120px 0 70px;
-    background:linear-gradient(100deg, rgba(11,15,25,.96) 8%, rgba(11,15,25,.78) 52%, rgba(11,15,25,.55) 100%), url('{{ url_for("static", filename="images/login-bg.png") }}') center/cover no-repeat; }
+    background:linear-gradient(100deg, rgba(11,15,25,.96) 8%, rgba(11,15,25,.78) 52%, rgba(11,15,25,.55) 100%), url('{{ hero_img }}') center/cover no-repeat; }
   .hero::after { content:''; position:absolute; left:0; right:0; bottom:0; height:140px; background:linear-gradient(180deg, transparent, var(--bg)); }
   .hero .wrap { position:relative; z-index:2; display:grid; grid-template-columns:1.15fr .85fr; gap:50px; align-items:center; }
   .eyebrow { display:inline-block; font-size:12px; font-weight:800; letter-spacing:3px; text-transform:uppercase; color:var(--gold); margin-bottom:16px; }
@@ -625,8 +736,9 @@ VISITOR_LANDING_HTML = '''<!DOCTYPE html>
       <a href="#keunggulan">Keunggulan</a><a href="#paket">Paket</a><a href="#trainer">Trainer</a><a href="#fasilitas">Fasilitas</a><a href="#cara">Cara Bergabung</a>
     </div>
     <div class="nav-actions">
+      <span class="pill hide-sm">Informasi Publik</span>
       {% if wa_general %}<a href="{{ wa_general }}" target="_blank" rel="noopener noreferrer" class="btn btn-gold btn-sm">Daftar Member</a>{% endif %}
-      <a href="/login" class="btn btn-ghost btn-sm">Masuk</a>
+      <a href="/login" class="btn btn-ghost btn-sm">Masuk Akun</a>
     </div>
   </div>
 </nav>
@@ -648,7 +760,7 @@ VISITOR_LANDING_HTML = '''<!DOCTYPE html>
       </div>
     </div>
     <div class="photo-card">
-      <img src="{{ url_for('static', filename='images/login-bg.png') }}" alt="Suasana area latihan FIT HUB GYM">
+      <img src="{{ hero_img }}" alt="Suasana area latihan FIT HUB GYM">
       <div class="tag"><b>Suasana FIT HUB GYM</b><br>Area latihan nyaman dengan pencahayaan neon &amp; alat lengkap.</div>
     </div>
   </div>
@@ -733,7 +845,7 @@ VISITOR_LANDING_HTML = '''<!DOCTYPE html>
 
 <section id="cara">
   <div class="wrap">
-    <div class="sec-head fade"><span class="eyebrow">Cara Bergabung</span><h2>Jadi member dalam 3 langkah</h2><p>Akun member diberikan admin setelah pendaftaran dan pembayaran terverifikasi.</p></div>
+    <div class="sec-head fade"><span class="eyebrow">Cara Bergabung</span><h2>Jadi member dalam 3 langkah</h2><p>Jelajahi informasi gym tanpa login. Akun member diberikan setelah pendaftaran.</p></div>
     <div class="steps">
       <div class="step fade"><h3>Hubungi admin</h3><p>Pilih paket lalu chat admin lewat WhatsApp untuk mendaftar.</p></div>
       <div class="step fade"><h3>Bayar via QRIS</h3><p>Lakukan pembayaran dan kirim bukti. Admin memverifikasinya.</p></div>
@@ -787,7 +899,7 @@ SCAN_RESULT_HTML = '''
             <b>Status Pintu:</b> <span style="color:#10b981; font-weight:bold;">TERBUKA</span>
         </div>
         
-        <a href="/" style="display:inline-block; padding:12px 20px; background:#f5b000; color:#121212; text-decoration:none; font-weight:bold; border-radius:8px; font-size:14px;">Kembali ke Dashboard</a>
+        <a href="/dashboard" style="display:inline-block; padding:12px 20px; background:#f5b000; color:#121212; text-decoration:none; font-weight:bold; border-radius:8px; font-size:14px;">Kembali ke Dashboard</a>
     </div>
 </body>
 </html>
@@ -814,25 +926,46 @@ def view_payment_proof(payment_id):
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
+    error = None
     if request.method == 'POST':
-        login_input = request.form.get('login_input', '').strip().lower()
+        login_input = request.form.get('login_input', '').strip().lower()[:100]
         password = request.form.get('password', '').strip()
-        
+        ip = request.remote_addr or '-'
+
+        wait = login_lock_seconds(ip, login_input)
+        if wait:
+            minutes = max(1, (wait + 59) // 60)
+            return render_template_string(LOGIN_HTML, error=f'Terlalu banyak percobaan gagal. Coba lagi sekitar {minutes} menit.'), 429
+
         conn = sqlite3.connect(DB_PATH)
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM users WHERE (LOWER(unique_code) = ? OR LOWER(name) = ? OR LOWER(email) = ?) AND password = ?", 
-                       (login_input, login_input, login_input, password))
-        user = cursor.fetchone()
+        cursor.execute("SELECT * FROM users WHERE LOWER(unique_code) = ? OR LOWER(name) = ? OR LOWER(email) = ?",
+                       (login_input, login_input, login_input))
+        candidates = cursor.fetchall()
         conn.close()
 
-        if user:
+        user = None
+        for row in candidates:
+            if is_password_hashed(row['password']) and check_password_hash(row['password'], password):
+                user = row
+                break
+        if not candidates:
+            check_password_hash(_DUMMY_HASH, password)  # samakan waktu respons
+
+        if user and user['role'] in ('owner', 'admin', 'trainer', 'member'):
+            clear_login_fails(ip, login_input)
+            session.clear()
             session['user_id'] = user['id']
             session['name'] = user['name']
             session['role'] = user['role']
             session['unique_code'] = user['unique_code']
             return redirect(url_for('dashboard'))
-    return render_template_string(LOGIN_HTML)
+
+        record_login_fail(ip, login_input)
+        error = 'Akun atau password salah.'
+        return render_template_string(LOGIN_HTML, error=error), 401
+    return render_template_string(LOGIN_HTML, error=error)
 
 @app.route('/qr_checkin/<unique_code>')
 def qr_checkin(unique_code):
@@ -853,28 +986,29 @@ def qr_checkin(unique_code):
     conn.close()
     return "<h1>QR Code Tidak Valid</h1>", 400
 
-def render_visitor_landing():
-    """Halaman utama publik (tanpa login) untuk calon member: hanya informasi umum gym."""
+@app.route('/')
+def public_home():
+    """Halaman publik tanpa akun dan tanpa akses data pribadi."""
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
+    data = {}
+    # Visitor hanya menerima informasi umum gym (tanpa data pribadi member/pembayaran).
     cursor.execute("SELECT package_name, duration_months, price FROM membership_packages WHERE status = 'Aktif' ORDER BY duration_months, price")
-    packages = cursor.fetchall()
+    data['packages'] = cursor.fetchall()
     cursor.execute("SELECT name FROM users WHERE role = 'trainer' ORDER BY name")
-    trainers = cursor.fetchall()
+    data['trainers'] = cursor.fetchall()
     cursor.execute("SELECT equipment_name, category, status FROM equipment ORDER BY category, equipment_name")
-    equipment = cursor.fetchall()
-    cursor.execute("SELECT phone FROM users WHERE role = 'admin' AND phone IS NOT NULL AND phone != '' ORDER BY id LIMIT 1")
-    admin_row = cursor.fetchone()
+    data['equipment'] = cursor.fetchall()
     conn.close()
-
-    phone = ''.join(ch for ch in ((admin_row['phone'] if admin_row else '') or '') if ch.isdigit())
-    if phone.startswith('0'):
-        phone = '62' + phone[1:]
+    # Nomor WhatsApp pendaftaran publik (081574783604 -> format internasional 6281574783604).
+    # Tidak bergantung pada nomor admin yang tersimpan di database.
+    phone = '6281574783604'
 
     def wa_link(text):
         return f'https://wa.me/{phone}?text={quote(text)}' if phone else ''
 
+    packages = data['packages']
     per_month = [p['price'] / max(p['duration_months'], 1) for p in packages]
     best_idx = per_month.index(min(per_month)) if len(packages) > 1 else -1
     package_cards = [{
@@ -885,24 +1019,55 @@ def render_visitor_landing():
         'best': i == best_idx,
         'wa': wa_link(f"Halo admin FIT HUB GYM, saya tertarik mengambil {p['package_name']}. Mohon info pendaftarannya."),
     } for i, p in enumerate(packages)]
-    trainer_cards = [{'name': t['name'], 'initial': (t['name'] or '?').strip()[:1].upper()} for t in trainers]
+    trainer_cards = [{'name': t['name'], 'initial': (t['name'] or '?').strip()[:1].upper()} for t in data['trainers']]
     groups = {}
-    for e in equipment:
+    for e in data['equipment']:
         groups.setdefault(e['category'], []).append({'name': e['equipment_name'], 'status': e['status']})
     equipment_groups = [{'name': k, 'rows': v} for k, v in groups.items()]
     return render_template_string(
         VISITOR_LANDING_HTML,
-        packages=package_cards, trainers=trainer_cards,
-        equipment=equipment, equipment_groups=equipment_groups,
-        available_count=sum(1 for e in equipment if e['status'] == 'Tersedia'),
-        wa_general=wa_link("Halo admin FIT HUB GYM, saya tertarik menjadi member. Mohon info pendaftarannya."))
+        name='Pengunjung', packages=package_cards, trainers=trainer_cards,
+        equipment=data['equipment'], equipment_groups=equipment_groups,
+        available_count=sum(1 for e in data['equipment'] if e['status'] == 'Tersedia'),
+        wa_general=wa_link(f"Halo admin FIT HUB GYM, saya tertarik menjadi member. Mohon info pendaftarannya."))
 
 
-@app.route('/')
+
+NAME_FORBIDDEN = set('<>"\'&`\\')
+
+
+def account_form_html(csrf_token, current_name, msg=None):
+    """Form ganti nama & password milik pengguna yang sedang login."""
+    notice = ''
+    if msg:
+        kind, text = msg
+        color, bg = ('#86efac', 'rgba(34,197,94,.15)') if kind == 'ok' else ('#fca5a5', 'rgba(239,68,68,.15)')
+        notice = (f'<div style="background:{bg}; border:1px solid {color}; color:{color}; padding:10px 14px; '
+                  f'border-radius:8px; font-size:13px; margin-bottom:16px;">{html.escape(text)}</div>')
+    return f'''
+        <div class="panel-box">
+            <h3>Pengaturan Akun</h3>
+            {notice}
+            <form action="/action" method="POST" style="margin-top:15px;">
+                <input type="hidden" name="action_type" value="update_account">
+                <input type="hidden" name="csrf_token" value="{csrf_token}">
+                <label>Nama Lengkap</label>
+                <input type="text" name="name" value="{html.escape(current_name, quote=True)}" required minlength="2" maxlength="60">
+                <label>Password Saat Ini <small style="font-weight:400;">(wajib diisi hanya jika ingin ganti password)</small></label>
+                <input type="password" name="current_password" autocomplete="current-password" placeholder="Password saat ini">
+                <label>Password Baru</label>
+                <input type="password" name="new_password" minlength="{MIN_PASSWORD_LEN}" autocomplete="new-password" placeholder="Minimal {MIN_PASSWORD_LEN} karakter, kosongkan jika tidak diganti">
+                <label>Ulangi Password Baru</label>
+                <input type="password" name="confirm_password" autocomplete="new-password" placeholder="Ulangi password baru">
+                <button type="submit" class="btn-primary">Simpan Perubahan</button>
+            </form>
+        </div>
+    '''
+
+@app.route('/dashboard')
 def dashboard():
-    # Beranda publik: siapa pun (visitor) bisa melihat tanpa login. Member/staf yang sudah login masuk ke dashboard-nya.
-    if 'user_id' not in session or session.get('role') == 'visitor':
-        return render_visitor_landing()
+    if 'user_id' not in session or session.get('role') not in ('owner', 'admin', 'trainer', 'member'):
+        return redirect(url_for('login'))
     
     menu = request.args.get('menu', 'dashboard')
     search_query = request.args.get('q', '').strip().lower()
@@ -1049,7 +1214,14 @@ def dashboard():
 
     body_content = ""
     
-    if role == 'member':
+    if menu == 'account':
+        body_content = f'''
+            <span class="motto-tag">AKUN SAYA</span>
+            <h2>Akun Saya</h2>
+            <p style="margin-bottom:20px;">Ubah nama tampilan atau ganti password Anda. Kode akun: <b>{html.escape(session.get('unique_code', ''))}</b></p>
+            {account_form_html(csrf_token, session.get('name', ''), session.pop('account_msg', None))}
+        '''
+    elif role == 'member':
         if menu == 'dashboard':
             p = data['profile'] or {'remaining_days': 0, 'status_paket': 'Belum Aktif'}
             body_content = f'''
@@ -1201,14 +1373,7 @@ def dashboard():
                 <h2>Pembayaran & Profil</h2>
                 <p style="margin-bottom:20px;">Pembayaran baru berstatus <b>Pending</b> sampai admin memverifikasi uang masuk. Bukti upload saja belum berarti lunas.</p>
                 <table style="margin-bottom:25px;"><tr><th>ID Transaksi</th><th>Paket</th><th>Jumlah</th><th>Tanggal</th><th>Status</th></tr>{rows}</table>
-                <div class="panel-box">
-                    <h3>Pengaturan Profil Pribadi</h3>
-                    <form onsubmit="event.preventDefault(); alert('Profil berhasil diperbarui!');" style="margin-top:15px;">
-                        <label>Nama Lengkap</label><input type="text" value="{session['name']}">
-                        <label>Password Baru</label><input type="password" placeholder="Kosongkan jika tidak diubah">
-                        <button type="submit" class="btn-primary">Simpan Perubahan</button>
-                    </form>
-                </div>
+                {account_form_html(csrf_token, session.get('name', ''), session.pop('account_msg', None))}
             '''
 
     elif role == 'trainer':
@@ -1350,12 +1515,12 @@ def dashboard():
                         <label>Nama Lengkap Member</label><input type="text" name="name" required placeholder="Contoh: Rina Wijaya">
                         <label>Email</label><input type="email" name="email" required placeholder="rina@gmail.com">
                         <label>Nomor Telepon</label><input type="text" name="phone" placeholder="08123456789">
-                        <label>Password Akun</label><input type="password" name="password" required value="password123">
+                        <label>Password Akun</label><input type="password" name="password" required minlength="8" autocomplete="new-password" placeholder="Minimal 8 karakter">
                         <button type="submit" class="btn-primary">Daftarkan Member Baru</button>
                     </form>
                 </div>
                 <h3>Daftar Member Terdaftar</h3>
-                <form method="GET" action="/"><input type="hidden" name="menu" value="manage_members"><input type="text" name="q" class="search-box" placeholder="Cari member..." value="{search_query}"></form>
+                <form method="GET" action="/dashboard"><input type="hidden" name="menu" value="manage_members"><input type="text" name="q" class="search-box" placeholder="Cari member..." value="{search_query}"></form>
                 <table><tr><th>Kode Unik</th><th>Nama Member</th><th>Email</th><th>Telepon</th><th>Aksi</th></tr>{rows}</table>
             '''
         elif menu == 'manage_trainers':
@@ -1370,7 +1535,7 @@ def dashboard():
                         <label>Nama Lengkap Trainer</label><input type="text" name="name" required placeholder="Contoh: Coach Hendra">
                         <label>Email</label><input type="email" name="email" required placeholder="hendra@gym.com">
                         <label>Nomor Telepon</label><input type="text" name="phone" placeholder="0812998877">
-                        <label>Password Akun</label><input type="password" name="password" required value="password123">
+                        <label>Password Akun</label><input type="password" name="password" required minlength="8" autocomplete="new-password" placeholder="Minimal 8 karakter">
                         <button type="submit" class="btn-primary">Daftarkan Trainer Baru</button>
                     </form>
                 </div>
@@ -1659,6 +1824,57 @@ def action():
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
 
+    if action_type == 'update_account':
+        def back(kind, text):
+            conn.close()
+            session['account_msg'] = (kind, text)
+            return redirect(url_for('dashboard', menu=request.form.get('back_menu') or ('profile' if session.get('role') == 'member' and request.referrer and 'menu=profile' in request.referrer else 'account')))
+
+        if not csrf_valid():
+            conn.close()
+            abort(400, description='Form kedaluwarsa. Muat ulang halaman dan coba lagi.')
+
+        uid = session['user_id']
+        new_name = ' '.join(request.form.get('name', '').split())
+        current_pw = request.form.get('current_password', '').strip()
+        new_pw = request.form.get('new_password', '').strip()
+        confirm_pw = request.form.get('confirm_password', '').strip()
+
+        if not (2 <= len(new_name) <= 60) or any(ch in NAME_FORBIDDEN or ord(ch) < 32 for ch in new_name):
+            return back('err', 'Nama harus 2-60 karakter dan tidak boleh mengandung < > " \' & ` atau \\.')
+
+        row = cursor.execute('SELECT password FROM users WHERE id = ?', (uid,)).fetchone()
+        if not row:
+            conn.close()
+            session.clear()
+            return redirect(url_for('login'))
+
+        changing_pw = bool(new_pw or confirm_pw or current_pw)
+        if changing_pw:
+            ip = request.remote_addr or '-'
+            limit_key = f'ganti-password:{uid}'
+            wait = login_lock_seconds(ip, limit_key)
+            if wait:
+                return back('err', f'Terlalu banyak percobaan gagal. Coba lagi sekitar {max(1, (wait + 59) // 60)} menit.')
+            if not (is_password_hashed(row[0]) and check_password_hash(row[0], current_pw)):
+                record_login_fail(ip, limit_key)
+                return back('err', 'Password saat ini salah. Tidak ada perubahan yang disimpan.')
+            if len(new_pw) < MIN_PASSWORD_LEN:
+                return back('err', f'Password baru minimal {MIN_PASSWORD_LEN} karakter.')
+            if new_pw != confirm_pw:
+                return back('err', 'Konfirmasi password baru tidak sama.')
+            if new_pw == current_pw:
+                return back('err', 'Password baru harus berbeda dari password saat ini.')
+            clear_login_fails(ip, limit_key)
+            cursor.execute('UPDATE users SET password = ? WHERE id = ?', (generate_password_hash(new_pw), uid))
+
+        cursor.execute('UPDATE users SET name = ? WHERE id = ?', (new_name, uid))
+        conn.commit()
+        session['name'] = new_name
+        if changing_pw:
+            session['payment_csrf'] = secrets.token_urlsafe(32)  # putar token CSRF setelah ganti password
+        return back('ok', 'Password dan nama berhasil diperbarui.' if changing_pw else 'Nama berhasil diperbarui.')
+
     if action_type == 'process_payment':
         if session.get('role') != 'member':
             conn.close()
@@ -1782,16 +1998,19 @@ def action():
         name = request.form.get('name').strip()
         email = request.form.get('email').strip()
         phone = request.form.get('phone', '').strip()
-        password = request.form.get('password').strip()
+        password = (request.form.get('password') or '').strip()
         
         prefix = 'MEM' if role == 'member' else 'TRN'
         cursor.execute("SELECT COUNT(*) FROM users WHERE role = ?", (role,))
         count = cursor.fetchone()[0] + 1
         unique_code = f"{prefix}{count:03d}"
 
+        if role not in ('member', 'trainer') or len(password) < MIN_PASSWORD_LEN:
+            conn.close()
+            abort(400, description=f'Password minimal {MIN_PASSWORD_LEN} karakter.')
         try:
             cursor.execute("INSERT INTO users (unique_code, name, email, password, role, phone) VALUES (?, ?, ?, ?, ?, ?)",
-                           (unique_code, name, email, password, role, phone))
+                           (unique_code, name, email, generate_password_hash(password), role, phone))
             new_user_id = cursor.lastrowid
             
             if role == 'member':
@@ -1905,8 +2124,35 @@ def action():
 @app.route('/logout')
 def logout():
     session.clear()
-    return redirect(url_for('dashboard'))
+    return redirect(url_for('public_home'))
+
+def reset_password_cli(code):
+    """Ganti password lewat terminal: python app.py reset-password OWN001"""
+    import getpass
+    conn = sqlite3.connect(DB_PATH)
+    row = conn.execute("SELECT id, name FROM users WHERE LOWER(unique_code) = ?", (code.lower(),)).fetchone()
+    if not row:
+        print(f"Akun dengan kode '{code}' tidak ditemukan.")
+        conn.close()
+        return
+    new_pw = getpass.getpass(f"Password baru untuk {row[1]} ({code}): ").strip()
+    if len(new_pw) < MIN_PASSWORD_LEN:
+        print(f"Password minimal {MIN_PASSWORD_LEN} karakter. Tidak ada perubahan.")
+        conn.close()
+        return
+    if new_pw != getpass.getpass("Ulangi password baru: ").strip():
+        print("Password tidak sama. Tidak ada perubahan.")
+        conn.close()
+        return
+    conn.execute("UPDATE users SET password = ? WHERE id = ?", (generate_password_hash(new_pw), row[0]))
+    conn.commit()
+    conn.close()
+    print("Password berhasil diganti.")
+
 
 if __name__ == '__main__':
     init_db()
+    if len(sys.argv) >= 3 and sys.argv[1] == 'reset-password':
+        reset_password_cli(sys.argv[2])
+        sys.exit(0)
     app.run(debug=False, host='0.0.0.0', port=8080)
