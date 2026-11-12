@@ -1,0 +1,16 @@
+
+<h2>Kelola Data Trainer</h2>
+<div class="panel-box">
+    <h3>➕ Tambah Trainer Baru</h3>
+    <form action="/action" method="POST" data-style="margin-top-8">
+        <input type="hidden" name="action_type" value="add_user">
+        <input type="hidden" name="role" value="trainer">
+        <label>Nama Lengkap Trainer</label><input type="text" name="name" required placeholder="Contoh: Coach Hendra">
+        <label>Email</label><input type="email" name="email" required placeholder="hendra@gym.com">
+        <label>Nomor Telepon</label><input type="text" name="phone" placeholder="0812998877">
+        <label>Password Akun</label><input type="password" name="password" required minlength="8" autocomplete="new-password" placeholder="Minimal 8 karakter">
+        <button type="submit" class="btn-primary">Daftarkan Trainer Baru</button>
+    </form>
+</div>
+<h3>Daftar Trainer Aktif</h3>
+<table><tr><th>Kode Unik</th><th>Nama Trainer</th><th>Email</th><th>Telepon</th><th>Aksi</th></tr>${rows}</table>

@@ -1,0 +1,23 @@
+[data-style="background-1"]:not(#unused-inline-id#unused-inline-id#unused-inline-id) { background: linear-gradient(rgba(11, 15, 25, 0.75), rgba(11, 15, 25, 0.85)), var(--login-image); background-size: cover; background-position: center; color: #f8fafc; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; font-family: 'Inter', sans-serif; }
+
+[data-style="background-2"]:not(#unused-inline-id#unused-inline-id#unused-inline-id) { background: rgba(19, 27, 46, 0.85); backdrop-filter: blur(12px); padding: 45px; border-radius: 20px; box-shadow: 0 20px 40px rgba(0,0,0,0.6); width: 100%; max-width: 420px; border: 1px solid rgba(255, 255, 255, 0.1); border-top: 4px solid #f5b000; }
+
+[data-style="text-align-3"]:not(#unused-inline-id#unused-inline-id#unused-inline-id) { text-align: center; margin-bottom: 25px; color: #f8fafc; font-weight: 800; font-size: 24px; letter-spacing: 0.5px; }
+
+[data-style="color-4"]:not(#unused-inline-id#unused-inline-id#unused-inline-id) { color: #f5b000; }
+
+[data-style="background-5"]:not(#unused-inline-id#unused-inline-id#unused-inline-id) { background: rgba(239,68,68,.15); border: 1px solid rgba(239,68,68,.45); color: #fca5a5; padding: 10px 14px; border-radius: 8px; font-size: 13px; margin-bottom: 18px; text-align: center; }
+
+[data-style="margin-bottom-6"]:not(#unused-inline-id#unused-inline-id#unused-inline-id) { margin-bottom: 20px; }
+
+[data-style="display-7"]:not(#unused-inline-id#unused-inline-id#unused-inline-id) { display: block; margin-bottom: 8px; font-size: 13px; color: #94a3b8; font-weight: 600; }
+
+[data-style="width-8"]:not(#unused-inline-id#unused-inline-id#unused-inline-id) { width: 100%; padding: 12px 16px; background: rgba(11, 15, 25, 0.9); border: 1px solid #1e293b; border-radius: 8px; color: #fff; font-size: 15px; box-sizing: border-box; }
+
+[data-style="margin-bottom-9"]:not(#unused-inline-id#unused-inline-id#unused-inline-id) { margin-bottom: 25px; }
+
+[data-style="width-10"]:not(#unused-inline-id#unused-inline-id#unused-inline-id) { width: 100%; padding: 14px; background: #f5b000; border: none; border-radius: 8px; color: #0b0f19; font-size: 15px; font-weight: 800; cursor: pointer; box-shadow: 0 4px 15px rgba(245,176,0,0.3); }
+
+[data-style="text-align-11"]:not(#unused-inline-id#unused-inline-id#unused-inline-id) { text-align: center; margin-top: 20px; font-size: 14px; color: #94a3b8; }
+
+[data-style="color-12"]:not(#unused-inline-id#unused-inline-id#unused-inline-id) { color: #f5b000; font-weight: 700; text-decoration: none; }

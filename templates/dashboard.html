@@ -1,0 +1,72 @@
+
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <title>FIT HUB GYM ACCESS - {{ role.upper() }} Dashboard</title>
+    
+<link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
+</head>
+<body>
+    <div class="sidebar">
+        <div class="sidebar-brand">
+            ⚡ FIT HUB GYM
+            <span class="role-pill">{{ role }}</span>
+        </div>
+        <ul class="sidebar-menu">
+            {% if role == 'member' %}
+                <li><a href="/dashboard?menu=dashboard" class="{{ 'active' if menu=='dashboard' }}">📊 Dashboard Utama</a></li>
+                <li><a href="/dashboard?menu=packages" class="{{ 'active' if menu=='packages' }}">📦 Paket Membership</a></li>
+                <li><a href="/dashboard?menu=checkin" class="{{ 'active' if menu=='checkin' }}">📷 Check-in QR Code</a></li>
+                <li><a href="/dashboard?menu=workouts" class="{{ 'active' if menu=='workouts' }}">🏋️ Program Latihan</a></li>
+                <li><a href="/dashboard?menu=progress" class="{{ 'active' if menu=='progress' }}">📈 Progres & Perkembangan</a></li>
+            {% elif role == 'trainer' %}
+                <li><a href="/dashboard?menu=dashboard" class="{{ 'active' if menu=='dashboard' }}">📊 Dashboard Trainer</a></li>
+                <li><a href="/dashboard?menu=assign_workout" class="{{ 'active' if menu=='assign_workout' }}">📋 Program Latihan Member</a></li>
+                <li><a href="/dashboard?menu=set_target" class="{{ 'active' if menu=='set_target' }}">🎯 Target Latihan Member</a></li>
+                <li><a href="/dashboard?menu=monitor_progress" class="{{ 'active' if menu=='monitor_progress' }}">📅 Progres & Jadwal Member</a></li>
+            {% elif role == 'admin' %}
+                <li><a href="/dashboard?menu=dashboard" class="{{ 'active' if menu=='dashboard' }}">📊 Dashboard Admin</a></li>
+                <li><a href="/dashboard?menu=manage_members" class="{{ 'active' if menu=='manage_members' }}">👥 Kelola Member</a></li>
+                <li><a href="/dashboard?menu=manage_packages" class="{{ 'active' if menu=='manage_packages' }}">📦 Kelola Paket Membership</a></li>
+                <li><a href="/dashboard?menu=manage_equipment" class="{{ 'active' if menu=='manage_equipment' }}">⚙️ Data Alat Gym</a></li>
+                <li><a href="/dashboard?menu=manage_payments" class="{{ 'active' if menu=='manage_payments' }}">💰 Kelola Pembayaran</a></li>
+                <li><a href="/dashboard?menu=manage_trainers" class="{{ 'active' if menu=='manage_trainers' }}">🏋️ Kelola Trainer</a></li>
+            {% elif role == 'owner' %}
+                <li><a href="/dashboard?menu=dashboard" class="{{ 'active' if menu=='dashboard' }}">📊 Dashboard Eksekutif</a></li>
+            {% endif %}
+            <li><a href="/dashboard?menu=account" class="{{ 'active' if menu=='account' }}">🔐 Akun Saya</a></li>
+        </ul>
+        <div class="sidebar-footer">
+            <a href="/logout" class="btn-logout">Keluar Sistem</a>
+        </div>
+    </div>
+    
+    <div class="main-container">
+        <div class="header">
+            <div class="user-info">Akun: <span>{{ session.name }}</span></div>
+            <div class="header-right">
+                <div class="bell-wrap">
+                    <button type="button" class="bell" id="bellBtn" aria-label="Notifikasi" aria-haspopup="true" aria-expanded="false">🔔<span class="bell-badge" id="bellBadge" hidden>0</span></button>
+                    <div class="bell-panel" id="bellPanel" hidden>
+                        <div class="bell-head"><b>Notifikasi</b><button type="button" id="bellAll">Tandai semua dibaca</button></div>
+                        <div id="bellList"><div class="bell-empty">Belum ada notifikasi.</div></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="content" {% if bg_url %}data-style="background-image-6" style="--dashboard-image: url('{{ bg_url }}');"{% endif %}>
+            <div class="content-inner">
+                {{ body_content | safe }}
+            </div>
+        </div>
+    </div>
+    {% if role == 'member' and menu == 'packages' %}
+    <script src="{{ url_for('static', filename='js/payment.js') }}"></script>
+    {% elif role == 'trainer' and menu == 'set_target' %}
+    <script src="{{ url_for('static', filename='js/training-target.js') }}"></script>
+    {% endif %}
+    <div class="toast-stack" id="toasts" aria-live="polite"></div>
+    <script src="{{ url_for('static', filename='js/notifications.js') }}" data-csrf="{{ csrf_token }}"></script>
+</body>
+</html>

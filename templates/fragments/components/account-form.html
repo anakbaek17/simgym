@@ -1,0 +1,18 @@
+
+<div class="panel-box">
+    <h3>Pengaturan Akun</h3>
+    ${notice}
+    <form action="/action" method="POST" data-style="margin-top-8">
+        <input type="hidden" name="action_type" value="update_account">
+        <input type="hidden" name="csrf_token" value="${csrf_token}">
+        <label>Nama Lengkap</label>
+        <input type="text" name="name" value="${current_name}" required minlength="2" maxlength="60">
+        <label>Password Saat Ini <small data-style="font-weight-9">(wajib diisi hanya jika ingin ganti password)</small></label>
+        <input type="password" name="current_password" autocomplete="current-password" placeholder="Password saat ini">
+        <label>Password Baru</label>
+        <input type="password" name="new_password" minlength="${min_password_len}" autocomplete="new-password" placeholder="Minimal ${min_password_len_5} karakter, kosongkan jika tidak diganti">
+        <label>Ulangi Password Baru</label>
+        <input type="password" name="confirm_password" autocomplete="new-password" placeholder="Ulangi password baru">
+        <button type="submit" class="btn-primary">Simpan Perubahan</button>
+    </form>
+</div>

@@ -1,0 +1,11 @@
+
+<h2>Dashboard Admin Operasional</h2>
+<div class="card-grid">
+    <div class="card"><h3>Total Member</h3><div class="value">${data_total_members} Orang</div></div>
+    <div class="card"><h3>Check-in Hari Ini</h3><div class="value">${data_checkins_today} Sesi</div></div>
+    <div class="card"><h3>Inventaris Layak</h3><div class="value">${value}%</div></div>
+    <div class="card"><h3>Pembayaran Menunggu Verifikasi</h3><div class="value" data-style="color-69">${data_pending_payments}</div><a href="/dashboard?menu=manage_payments" data-style="color-70">Buka Kelola Pembayaran</a></div>
+</div>
+${data_payments}
+<h3 data-style="margin-71">Pendaftar Terbaru</h3>
+<div data-style="overflow-x-34"><table><tr><th>Kode</th><th>Nama</th><th>Telepon</th><th>Paket</th><th>Mendaftar</th><th>Pembayaran</th></tr>${signup_rows}</table></div>

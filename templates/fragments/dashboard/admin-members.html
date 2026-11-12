@@ -1,0 +1,17 @@
+
+<h2>Kelola Data Member</h2>
+<div class="panel-box">
+    <h3>➕ Tambah Member Baru</h3>
+    <form action="/action" method="POST" data-style="margin-top-8">
+        <input type="hidden" name="action_type" value="add_user">
+        <input type="hidden" name="role" value="member">
+        <label>Nama Lengkap Member</label><input type="text" name="name" required placeholder="Contoh: Rina Wijaya">
+        <label>Email</label><input type="email" name="email" required placeholder="rina@gmail.com">
+        <label>Nomor Telepon</label><input type="text" name="phone" placeholder="08123456789">
+        <label>Password Akun</label><input type="password" name="password" required minlength="8" autocomplete="new-password" placeholder="Minimal 8 karakter">
+        <button type="submit" class="btn-primary">Daftarkan Member Baru</button>
+    </form>
+</div>
+<h3>Daftar Member Terdaftar</h3>
+<form method="GET" action="/dashboard"><input type="hidden" name="menu" value="manage_members"><input type="text" name="q" class="search-box" placeholder="Cari member..." value="${search_query}"></form>
+<table><tr><th>Kode Unik</th><th>Nama Member</th><th>Email</th><th>Telepon</th><th>Aksi</th></tr>${rows}</table>

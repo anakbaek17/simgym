@@ -1,0 +1,13 @@
+
+<form action='/action' method='POST' data-style="display-74">
+  <input type='hidden' name='csrf_token' value='${csrf_token}'>
+  <input type='hidden' name='action_type' value='verify_payment'>
+  <input type='hidden' name='payment_id' value='${p_id}'>
+  <button class='btn-primary' data-style="padding-75" type='submit'>Verifikasi Lunas</button>
+</form>
+<form action='/action' method='POST' data-style="display-74">
+  <input type='hidden' name='csrf_token' value='${csrf_token_3}'>
+  <input type='hidden' name='action_type' value='reject_payment'>
+  <input type='hidden' name='payment_id' value='${p_id_4}'>
+  <button class='btn-danger' type='submit'>Tolak</button>
+</form>

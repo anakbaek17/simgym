@@ -1,0 +1,136 @@
+
+<span class="motto-tag">EXECUTIVE BUSINESS MONITORING</span>
+<h2>Dashboard Eksekutif Owner</h2>
+<p data-style="margin-bottom-28">Selamat datang kembali, <b>${session_name}</b>. Berikut adalah laporan performa bisnis "FIT HUB GYM ACCESS".</p>
+
+${alert_box}
+
+<!-- 6 KARTU STATISTIK UTAMA -->
+<div class="card-grid">
+    <div class="card">
+        <h3>Total Pendapatan Gym</h3>
+        <div class="value" data-style="color-84">${formatted_revenue}</div>
+        <small data-style="color-85">Akumulasi Lunas</small>
+    </div>
+    <div class="card">
+        <h3>Total Member Aktif</h3>
+        <div class="value">${data_total_active_members} <span data-style="font-size-86">Org</span></div>
+        <small data-style="color-85">Masa Aktif &gt; 0 Hari</small>
+    </div>
+    <div class="card">
+        <h3>Check-in Hari Ini</h3>
+        <div class="value">${data_checkins_today} <span data-style="font-size-86">Sesi</span></div>
+        <small data-style="color-87">Live Hari Ini</small>
+    </div>
+    <div class="card">
+        <h3>Total Member</h3>
+        <div class="value">${data_total_members} <span data-style="font-size-86">Org</span></div>
+        <small data-style="color-87">Terdaftar di Sistem</small>
+    </div>
+    <div class="card">
+        <h3>Segera Berakhir</h3>
+        <div class="value" data-style="color-88">${data_expiring_soon} <span data-style="font-size-86">Org</span></div>
+        <small data-style="color-89">Masa Aktif &le; 7 Hari</small>
+    </div>
+    <div class="card">
+        <h3>Transaksi Berhasil</h3>
+        <div class="value">${data_successful_transactions} <span data-style="font-size-86">Trx</span></div>
+        <small data-style="color-85">Status Lunas</small>
+    </div>
+</div>
+
+<!-- GRAFIK PENDAPATAN & RINGKASAN -->
+<div class="owner-grid-split" data-style="display-90">
+    <div class="panel-box" data-style="max-width-91">
+        <div data-style="display-92">
+            <div>
+                <h3 data-style="font-size-93">Grafik Tren Pendapatan Bulanan</h3>
+                <p data-style="font-size-94">Perkembangan omset pendapatan dari transaksi lunas</p>
+            </div>
+            <span class="badge badge-success">Real-Time Data</span>
+        </div>
+        ${chart_content}
+    </div>
+
+    <div class="panel-box" data-style="max-width-95">
+        <div>
+            <h3 data-style="font-size-96">Ringkasan Operasional</h3>
+            <p data-style="font-size-97">Indikator kesehatan bisnis gym.</p>
+
+            <div data-style="display-98">
+                <div data-style="background-99">
+                    <span data-style="font-size-100">Rata-rata Trx</span>
+                    <b data-style="color-101">Rp ${value}</b>
+                </div>
+                <div data-style="background-99">
+                    <span data-style="font-size-100">Akumulasi Check-in</span>
+                    <b data-style="color-102">${data_total_checkins} Sesi</b>
+                </div>
+                <div data-style="background-99">
+                    <span data-style="font-size-100">Sistem Server</span>
+                    <b data-style="color-102">🟢 Online (WIB)</b>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- TABEL TRANSAKSI TERBARU & CHECK-IN -->
+<div class="owner-grid-split" data-style="display-103">
+    <div class="panel-box" data-style="max-width-91">
+        <div data-style="display-104">
+            <h3 data-style="font-size-93">Transaksi Pembayaran Terbaru</h3>
+            <span data-style="font-size-105">5 Teratas</span>
+        </div>
+        <table data-style="margin-top-106">
+            <tr>
+                <th>Member</th>
+                <th>Paket</th>
+                <th>Tanggal</th>
+                <th>Jumlah</th>
+                <th>Status</th>
+            </tr>
+            ${pay_rows}
+        </table>
+    </div>
+
+    <div class="panel-box" data-style="max-width-91">
+        <div data-style="display-104">
+            <h3 data-style="font-size-93">Aktivitas Check-in Terbaru</h3>
+            <span data-style="font-size-105">Live Log</span>
+        </div>
+        <table data-style="margin-top-106">
+            <tr>
+                <th>Member</th>
+                <th>Waktu</th>
+                <th>Status</th>
+            </tr>
+            ${checkin_rows}
+        </table>
+    </div>
+</div>
+
+<!-- LAPORAN KEUANGAN & REKAPITULASI -->
+<div class="panel-box" data-style="max-width-107">
+    <div data-style="display-36">
+        <div>
+            <h3 data-style="font-size-108">Laporan Keuangan & Rekapitulasi Bulanan</h3>
+            <p data-style="font-size-109">Rekapitulasi performa bisnis gym secara komprehensif.</p>
+        </div>
+        <button class="btn-primary" data-print-report>Export PDF / Print</button>
+    </div>
+    <table>
+        <tr>
+            <th>Bulan</th>
+            <th>Total Member Terdaftar</th>
+            <th>Total Pendapatan Lunas</th>
+            <th>Akumulasi Check-in</th>
+        </tr>
+        <tr>
+            <td><b>${value_14}</b></td>
+            <td>${data_total_members_15} Orang</td>
+            <td><b data-style="color-84">${formatted_revenue_16}</b></td>
+            <td>${data_total_checkins_17} Sesi</td>
+        </tr>
+    </table>
+</div>

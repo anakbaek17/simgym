@@ -1,0 +1,69 @@
+
+<span class="motto-tag">MEMBERSHIP ACCESS</span>
+<h2>Paket Membership</h2>
+<p data-style="margin-bottom-25">Pilihan paket fleksibel untuk kebutuhan kebugaran Anda.</p>
+<table><tr><th>Nama Paket</th><th>Durasi</th><th>Harga</th><th>Aksi</th></tr>${rows}</table>
+
+<h3 id="riwayat-pembayaran" data-style="margin-32">💳 Riwayat Pembayaran</h3>
+<p data-style="margin-bottom-33">Pembayaran baru berstatus <b>Pending</b> sampai admin memverifikasi uang masuk. Bukti upload saja belum berarti lunas.</p>
+<div data-style="overflow-x-34"><table data-style="margin-bottom-28"><tr><th>ID Transaksi</th><th>Paket</th><th>Jumlah</th><th>Tanggal</th><th>Status</th></tr>${pay_rows}</table></div>
+
+<!-- MODAL CHECKOUT PEMBAYARAN GOPAY & QRIS -->
+<div id="paymentModal" class="modal-overlay">
+    <div class="modal-box" data-style="max-height-35">
+        <div data-style="display-36">
+            <h3 data-style="font-size-37">Checkout Pembayaran Gym</h3>
+            <button data-close-payment data-style="background-38">✕</button>
+        </div>
+
+        <div data-style="background-39">
+            <div data-style="font-size-27">Paket Yang Dipilih:</div>
+            <div id="modalPackageName" data-style="font-size-40">-</div>
+            <div id="modalPackagePrice" data-style="font-size-41">Rp 0</div>
+        </div>
+
+        <form action="/action" method="POST" enctype="multipart/form-data">
+            <input type="hidden" name="csrf_token" value="${csrf_token}">
+            <input type="hidden" name="action_type" value="process_payment">
+            <input type="hidden" name="package_id" id="inputPackageId">
+            <!-- Harga/durasi hanya dihitung oleh server dari database -->
+
+            <label data-style="margin-bottom-42">Pilih Metode Pembayaran:</label>
+
+            <div class="payment-method-card" data-payment-method="qris">
+                <div><b>📱 Scan QRIS Pembayaran Gym</b><br><small data-style="color-43">Gunakan aplikasi pembayaran yang mendukung QRIS.</small></div>
+                <input type="radio" name="payment_method" id="radioQris" value="qris" required>
+            </div>
+
+            <div class="payment-method-card" data-payment-method="gopay_direct">
+                <div><b>💙 Direct GoPay / Transfer Nomor HP</b><br><small data-style="color-43">Transfer langsung ke Nomor GoPay Pengelola</small></div>
+                <input type="radio" name="payment_method" id="radioGopay" value="gopay_direct">
+            </div>
+
+            <!-- DETAIL QRIS -->
+            <div id="qrisDetail" data-style="display-44">
+                <p data-style="font-size-45">Scan QRIS di Bawah Ini:</p>
+                <a href="/qris_image" target="_blank" rel="noopener" title="Ketuk untuk memperbesar"><img src="/qris_image" data-style="width-46" alt="QRIS Pembayaran Gym"></a>
+                <p data-style="font-size-47">Nominal yang dibayar: <b id="modalQrisAmount" data-style="color-48">Rp 0</b></p>
+                <p data-style="font-size-49">QRIS ini tidak memuat nominal, jadi isi sendiri sesuai total di atas.</p>
+                <p data-style="font-size-50">Nama merchant pada QRIS: <b data-style="color-51">Gym fitnes, Wisata</b>. Pastikan tujuan pembayaran sesuai yang tampil di aplikasi Anda.</p>
+                <p data-style="font-size-52">QRIS ini memerlukan pengecekan transaksi secara manual. Menekan tombol konfirmasi bukan bukti pembayaran berhasil.</p>
+            </div>
+
+            <!-- DETAIL GOPAY DIRECT -->
+            <div id="gopayDetail" data-style="display-53">
+                <b>Nomor HP GoPay / DANA:</b><br>
+                <code data-style="color-54">${gopay_number}</code><br>
+                <b>Atas Nama:</b> ${gopay_name}<br>
+                <small data-style="color-55">Lakukan transfer GoPay/DANA sesuai nominal harga paket di atas.</small>
+            </div>
+
+            <div data-style="background-56">
+                <label for="paymentProof" data-style="color-57">Upload Bukti Pembayaran (wajib)</label>
+                <input type="file" name="payment_proof" id="paymentProof" accept="image/png,image/jpeg,image/webp" required data-style="margin-bottom-58">
+                <p data-style="font-size-59">Format JPG, PNG, atau WebP, maksimum 5 MB. Admin akan mencocokkan bukti dengan riwayat transaksi yang benar-benar masuk ke rekening/merchant.</p>
+            </div>
+            <button type="submit" class="btn-primary" data-style="width-60">KIRIM BUKTI — MENUNGGU VERIFIKASI</button>
+        </form>
+    </div>
+</div>

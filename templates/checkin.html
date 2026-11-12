@@ -1,0 +1,26 @@
+
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Check-in Gym Success</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/checkin.css') }}">
+</head>
+<body data-style="background-1">
+    <div data-style="background-2">
+        <div data-style="font-size-3">✅</div>
+        <h2 data-style="color-4">CHECK-IN BERHASIL</h2>
+        <p data-style="color-5">Akses gerbang pintu gym telah diverifikasi secara otomatis.</p>
+        
+        <div data-style="background-6">
+            <b>Nama Member:</b> {{ user['name'] }}<br>
+            <b>Kode Unik:</b> {{ user['unique_code'] }}<br>
+            <b>Waktu Masuk:</b> {{ time_now }}<br>
+            <b>Status Pintu:</b> <span data-style="color-7">TERBUKA</span>
+        </div>
+        
+        <a href="/dashboard" data-style="display-8">Kembali ke Dashboard</a>
+    </div>
+</body>
+</html>

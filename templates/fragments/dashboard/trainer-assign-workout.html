@@ -1,0 +1,25 @@
+
+<h2>Program Latihan Member</h2>
+<div class="panel-box">
+    <form action="/action" method="POST">
+        <input type="hidden" name="csrf_token" value="${csrf_token}">
+        <input type="hidden" name="action_type" value="add_workout">
+        <label>Pilih Member Binaan</label><select name="member_id" required>${options}</select>
+        <label>Nama Latihan (Bench Press, Squat, Plank)</label><input type="text" name="exercise_name" required maxlength="100">
+        <div data-style="display-64">
+            <div data-style="flex-65"><label>Set</label><input type="number" name="sets" min="1" required></div>
+            <div data-style="flex-65"><label>Repetisi</label><input type="number" name="reps" min="1" required></div>
+            <div data-style="flex-65"><label>Beban (kg)</label><input type="number" step="0.5" min="0" name="weight_kg" required></div>
+        </div>
+        <div data-style="display-64">
+            <div data-style="flex-65"><label>Tanggal Latihan</label><input type="date" name="schedule_date" required></div>
+            <div data-style="flex-65"><label>Jam Latihan</label><input type="time" name="schedule_time" required></div>
+        </div>
+        <label>Link Video Panduan (opsional)</label>
+        <input type="url" name="video_url" maxlength="500" placeholder="https://www.youtube.com/watch?v=... atau link file .mp4" data-style="margin-bottom-58">
+        <p data-style="margin-bottom-66">Link YouTube tampil sebagai pemutar di dashboard member. Link file .mp4/.webm juga didukung.</p>
+        <button type="submit" class="btn-primary">Kirim Program Latihan</button>
+    </form>
+</div>
+<h3>Program yang Sudah Dikirim</h3>
+<div data-style="overflow-x-34"><table><tr><th>Member</th><th>Latihan</th><th>Jadwal</th><th>Video</th></tr>${sent_rows}</table></div>

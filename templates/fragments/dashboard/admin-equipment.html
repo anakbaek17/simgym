@@ -1,0 +1,12 @@
+
+<h2>Data Alat Gym</h2>
+<div class="panel-box">
+    <form action="/action" method="POST">
+        <input type="hidden" name="action_type" value="add_equipment">
+        <label>Nama Alat</label><input type="text" name="equipment_name" required>
+        <label>Kategori</label><select name="category"><option value="Cardio">Cardio</option><option value="Beban">Beban</option></select>
+        <label>Status</label><select name="status"><option value="Tersedia">Tersedia</option><option value="Perbaikan">Perbaikan</option><option value="Rusak">Rusak</option></select>
+        <button type="submit" class="btn-primary">Tambah Alat</button>
+    </form>
+</div>
+<table><tr><th>Nama Alat</th><th>Kategori</th><th>Status</th></tr>${rows}</table>

@@ -1,0 +1,22 @@
+
+<h2>Target Latihan Member</h2>
+<p data-style="margin-bottom-25">Isi berat badan &amp; body fat awal, lalu targetnya. Jika member sudah punya target, form terisi otomatis dan bisa diperbarui.</p>
+<div class="panel-box">
+    <form action="/action" method="POST">
+        <input type="hidden" name="csrf_token" value="${csrf_token}">
+        <input type="hidden" name="action_type" value="set_target">
+        <label>Pilih Member Binaan</label><select name="member_id" id="targetMember" required>${options}</select>
+        <div data-style="display-67">
+            <div data-style="flex-68"><label>Berat Badan Awal (kg)</label><input type="number" step="0.1" min="20" max="300" name="start_weight" id="startWeight" required></div>
+            <div data-style="flex-68"><label>Target Berat Badan (kg)</label><input type="number" step="0.1" min="20" max="300" name="target_weight" id="targetWeight" required></div>
+        </div>
+        <div data-style="display-67">
+            <div data-style="flex-68"><label>Body Fat Awal (%)</label><input type="number" step="0.1" min="2" max="60" name="start_body_fat" id="startBodyFat" required></div>
+            <div data-style="flex-68"><label>Target Body Fat (%)</label><input type="number" step="0.1" min="2" max="60" name="target_body_fat" id="targetBodyFat" required></div>
+        </div>
+        <label>Catatan Target</label><textarea rows="3" name="notes" id="targetNotes" maxlength="500"></textarea>
+        <button type="submit" class="btn-primary">Simpan Target</button>
+    </form>
+</div>
+<h3>Target Aktif Member</h3>
+<div data-style="overflow-x-34"><table><tr><th>Member</th><th>Berat Badan (awal → target)</th><th>Body Fat (awal → target)</th><th>Catatan</th></tr>${trows}</table></div>
