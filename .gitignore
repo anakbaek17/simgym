@@ -1,0 +1,18 @@
+# Data & rahasia (jangan di-share / di-upload)
+database.db
+.gym_secret_key
+payment_proofs/
+
+# Python
+__pycache__/
+*.pyc
+venv/
+.venv/
+
+# Backup
+*.bak
+
+# Sertifikat HTTPS lokal
+cert.pem
+key.pem
+cert_ips.txt
